@@ -1,0 +1,38 @@
+schedules:
+  - cron: "0 3,6,9,12,15,18,21 * * *"
+    displayName: "Build OWASP Dependency Check cache every 3 hours"
+    branches:
+      include:
+        - master
+    always: true
+
+pool:
+  vmImage: ubuntu-16.04
+
+steps:
+  - task: DownloadGitHubRelease@0
+    displayName: 'Download cache from release on GitHub'
+    inputs:
+      connection: 'github-vnomus'
+      userRepository: 'mvdbos/owasp-dep-check-cache-builder'
+      defaultVersionType: 'specificTag'
+      version: 'v1.0'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - script: |
+      curl -sfL -o $(system.defaultWorkingDirectory)/dependency-check.zip https://dl.bintray.com/jeremy-long/owasp/dependency-check-5.1.0-release.zip
+      unzip $(system.defaultWorkingDirectory)/dependency-check.zip -d $(system.defaultWorkingDirectory)
+      $(system.defaultWorkingDirectory)/dependency-check/bin/dependency-check.sh --updateonly --data $(System.ArtifactsDirectory)
+    displayName: 'Update OWASP cache'
+  
+  - task: GitHubRelease@0
+    displayName: 'Update release on GitHub'
+    inputs:
+      gitHubConnection: github-vnomus
+      repositoryName: '$(Build.Repository.Name)' 
+      action: 'edit' # Options: create, edit, delete
+      target: '$(Build.SourceVersion)' # Required when action == Create || Action == Edit
+      tag: 'v1.0'
+      assets: '$(System.ArtifactsDirectory)/*'
+      assetUploadMode: 'delete' 
+      addChangeLog: false
